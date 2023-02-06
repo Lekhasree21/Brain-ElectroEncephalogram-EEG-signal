@@ -7,4 +7,4 @@ The best candidate regression model has selected based on the above factors and 
 Computed the posterior distributions by using the Rejection ABC method on selected candidate model followed by joint and marginal posterior distribution plots.
 I used RStudio to perform the tasks using R language
 
-The R code for these tasks available in 'Stats_coursework_markdown.Rmd' file
+The R code for these tasks available in 'Stats_coursework_markdown_push.Rmd' file
