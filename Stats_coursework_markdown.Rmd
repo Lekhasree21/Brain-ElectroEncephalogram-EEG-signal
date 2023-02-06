@@ -1,0 +1,358 @@
+---
+title: "Statistics_coursework"
+author: "Lekhasree"
+date: "29/01/2021"
+output:
+  word_document: 
+    fig_height: 6
+    fig_width: 10
+  html_document: default
+editor_options: 
+  chunk_output_type: console
+---
+
+### Read csv data
+```{r}
+X = read.csv("C:/Users/LENOVO/Desktop/Statistics coursework/X.csv", header = F)
+y = read.csv("C:/Users/LENOVO/Desktop/Statistics coursework/y.csv", header = F)
+time = read.csv("C:/Users/LENOVO/Desktop/Statistics coursework/time.csv", header = F,skip = 1)
+#fix the time values
+time = rbind(0, time)
+
+#generating matrix forms
+X_m <- data.matrix(X)
+y_m <- data.matrix(y)
+
+#generating data frame by binding these three data sets .
+colnames(X) = paste0(rep("x",ncol(X)),1:ncol(X))
+colnames(y) = "y"
+colnames(time) = "time"
+
+df = cbind(time,X,y)
+head(df,4)
+```
+### Task 1 Preliminary data analysis
+
+#### a) Time Series plots
+
+```{r}
+library(ggplot2)
+library(reshape2)
+
+melt_df <- melt(df,id="time")
+
+par(mfrow=c(2,2))
+
+plot(df$time,df$x1, type='l', col="sienna2", xlab="Time (sec)", ylab="x1")
+
+plot(df$time,df$x2, type='l', col="palegreen3", xlab="Time (sec)", ylab="x2")
+plot(df$time,df$x3, type='l', col="yellow3", xlab="Time (sec)", ylab="x3")
+plot(df$time,df$x4, type='l', col="black", xlab="Time (sec)", ylab="x4")
+mtext("Time series plots", outer=TRUE, cex=1, line=-3.5)
+
+plot(df$time,df$y, type='l', col="darkblue", xlab="Time (sec)", ylab="y")
+
+ggplot(melt_df,aes(x=time,y=value,colour=variable,group=variable)) + geom_line() + ggtitle("Time Series plot") + theme(plot.title = element_text(hjust = 0.5)) + xlab("Time (sec)") + ylab("Signals")
+```
+
+#### b) Distribution for each EEG signal
+
+```{r}
+
+library(Hmisc)
+hist.data.frame(df[ , 2:6])
+mtext("Distribution for each signal", outer=TRUE, cex=1, line=-2.5)
+```
+
+#### c) Correlation and scatter plots
+
+```{r}
+library(corrplot)
+library(RColorBrewer)
+group <- NA
+group[cor(df[,2:6]) < - 0.5] <- 1
+group[cor(df[,2:6]) >= - 0.5 & cor(df[,2:6]) <= 0.5] <- 2
+group[cor(df[,2:6]) > 0.5] <- 3
+group
+
+cor(df[,2:6])
+pairs(df[,2:6], col=c('black', 'plum3', 'sienna2')[group])
+mtext("Scatter plots", outer=TRUE, cex=1, line=-2)
+```
+
+
+### Task 2 Regression - modeling the relationship between EEG signals
+
+```{r}
+thetaBias = matrix(1 , nrow=length(X_m[,1]),ncol=1)
+
+#Generate candidate models
+X1<-cbind(X_m[,4],X_m[,1]^2,X_m[,1]^3,X_m[,3]^4,thetaBias)
+X2<-cbind(X_m[,3]^3,X_m[,3]^4,thetaBias)
+X3<-cbind(X_m[,2],X_m[,1]^3,X_m[,3]^4,thetaBias)
+X4<-cbind(X_m[,4],X_m[,1]^3,X_m[,3]^4,thetaBias)
+X5<-cbind(X_m[,4],X_m[,1]^2,X_m[,1]^3,X_m[,3]^4,X_m[,1]^4,thetaBias)
+```
+
+#### 2.1 Estimate model parameters
+
+```{r}
+to_thetaHat <- function(x_th,y_th) {
+  thetaa <- solve(t(x_th) %*% x_th) %*% t(x_th) %*% y_th
+  return(thetaa)
+}
+
+thetaHat1<- to_thetaHat(X1,y_m)
+thetaHat2<- to_thetaHat(X2,y_m)
+thetaHat3<- to_thetaHat(X3,y_m)
+thetaHat4<- to_thetaHat(X4,y_m)
+thetaHat5<- to_thetaHat(X5,y_m)
+
+thetaHat5
+```
+
+#### 2.2 Model residual (error) sum of squared errors (RSS)
+
+```{r}
+to_yHat <- function(x_rss,thetahat_rss) {
+  y_hat = x_rss %*% thetahat_rss
+  return(y_hat)
+}
+
+to_RSS <- function(x_rss, y_rss, thetahat_rss) {
+  y_hat = to_yHat(x_rss, thetahat_rss)
+  rss_val <- sum((y_rss-y_hat)^2)
+  return(rss_val)
+}
+
+RSS1<- to_RSS(X1,y_m, thetaHat1)
+RSS2<- to_RSS(X2,y_m, thetaHat2)
+RSS3<- to_RSS(X3,y_m, thetaHat3)
+RSS4<- to_RSS(X4,y_m, thetaHat4)
+RSS5<- to_RSS(X5,y_m, thetaHat5)
+
+```
+
+#### 2.3 log-likelihood function
+
+```{r}
+to_loglikelihood <- function(x_rss,rss_li) {
+  n<-length(x_rss[,1])
+  variance<- rss_li/(n-1)
+  likelihood<- -((n/2)*log(2*pi))-((n/2)*log(variance))-((1/(2*variance))*rss_li)
+  return(likelihood)
+}
+
+likelihood1<-to_loglikelihood(X1,RSS1)
+likelihood2<-to_loglikelihood(X2,RSS2)
+likelihood3<-to_loglikelihood(X3,RSS3)
+likelihood4<-to_loglikelihood(X4,RSS4)
+likelihood5<-to_loglikelihood(X5,RSS5)
+
+```
+
+#### 2.4 Akaike information criterion (AIC) and Bayesian information criterion (BIC) 
+
+```{r}
+n<-length(X[,1])
+
+to_AicBic <- function(thetaHat_ic,likelihood_ic) {
+  k<-length(thetaHat_ic)
+  aic <- (2*k)-(2*likelihood_ic)
+  bic <- (k*log(n))-(2*likelihood_ic)
+  return(list(aic,bic))
+}
+
+aicbic1<-matrix(to_AicBic(thetaHat1,likelihood1),1,2)
+aicbic2<-matrix(to_AicBic(thetaHat2,likelihood2),1,2)
+aicbic3<-matrix(to_AicBic(thetaHat3,likelihood3),1,2)
+aicbic4<-matrix(to_AicBic(thetaHat4,likelihood4),1,2)
+aicbic5<-matrix(to_AicBic(thetaHat5,likelihood5),1,2)
+
+aicbic5
+```
+
+#### 2.5 Plot and evaluate the error distributions
+
+```{r}
+to_error <- function(y_e, yHat_e) {
+  e <- y_e - yHat_e
+  return(e)
+}
+
+yHat1 <- to_yHat(X1,thetaHat1)
+yHat2 <- to_yHat(X2,thetaHat2)
+yHat3 <- to_yHat(X3,thetaHat3)
+yHat4 <- to_yHat(X4,thetaHat4)
+yHat5 <- to_yHat(X5,thetaHat5)
+
+par(mfrow=c(2,3))
+
+qqplot(X_m, y_m, xlab = "input signals X", ylab = "output signal y", main="Model 1")
+qqline(yHat1)
+qqplot(X_m, y_m, xlab = "input signals X", ylab = "output signal y", main="Model 2")
+qqline(yHat2)
+qqplot(X_m, y_m, xlab = "input signals X", ylab = "output signal y", main="Model 3")
+qqline(yHat3)
+qqplot(X_m, y_m, xlab = "input signals X", ylab = "output signal y", main="Model 4")
+qqline(yHat4)
+qqplot(X_m, y_m, xlab = "input signals X", ylab = "output signal y", main="Model 5")
+qqline(yHat5)
+
+mtext("Error distribution for each model", outer=TRUE, cex=1, line=-1.3)
+
+qqplot(X_m,y_m,xlab = "input signals X", ylab = "output signal y")
+qqline(yHat1, col='sienna2')
+qqline(yHat2, col='palegreen3')
+qqline(yHat3, col='yellow3')
+qqline(yHat4, col='black')
+qqline(yHat5, col='darkblue')
+legend("topleft", legend = c("Model 1","Model 2","Model 3","Model 4","Model 5"), col=c("sienna2", "palegreen3",  "yellow3", "black", "darkblue"),pch=c(4,4,4,4,4))
+
+mtext("Error distribution of all models", outer=TRUE, cex=1, line=-3.3)
+
+```
+
+#### 2.6 Best regression model according to the AIC, BIC and distribution of model residuals from the 5 candidate models
+
+```{r}
+##### AIC -BIC
+aic <-rbind(aicbic1[1], aicbic2[1], aicbic3[1], aicbic4[1], aicbic5[1])
+bic <-rbind(aicbic1[2], aicbic2[2], aicbic3[2], aicbic4[2], aicbic5[2])
+
+plot(matrix(aic[,1]), type = "b")
+plot(matrix(bic[,1]), type = "b")
+
+##### 
+
+```
+
+#### 2.7 Model validation
+
+```{r}
+
+#train test split
+X_train <- head(X_m, round(nrow(X_m)*0.7))
+X_test <- tail(X_m, round(nrow(X_m)*0.3))
+
+y_train <- head(y_m, round(nrow(y_m)*0.7))
+y_test <- tail(y_m, round(nrow(y_m)*0.3))
+```
+
+
+```{r}
+
+length(X_train[,1])
+length(X_test[,1])
+#Best Model
+to_model3 <- function(dataa) {
+  thetaBias_d = matrix(1 , nrow=length(dataa[,1]),ncol=1)
+  X3_mod <-cbind(dataa[,2],dataa[,1]^3, dataa[,3]^4,thetaBias_d)
+  return(X3_mod)
+}
+
+
+# 2.7 1. Estimate model parameters for the training set
+thetaHat3_test <- to_thetaHat(to_model3(X_train), y_train)
+
+# 2.7 2. Compute model's prediction on testing data
+yHat3_test <- to_yHat(to_model3(X_test), thetaHat3_test)
+
+# 2.7 3. Compute the 95% (model prediction) confidence intervals and plot them (with error bars) together with the mean values of the model prediction, as well as the testing data samples.
+error = y_test - yHat3_test
+
+sse = norm(error , type = "2")^2
+
+sigma_2 = sse/(length(to_model3(X_test)[,1]) - 1 )
+cov_thetaHat =  solve(t(to_model3(X_test)) %*% to_model3(X_test))
+cov_thetaHat
+var_yHat = matrix(0 , length(to_model3(X_test)[,1]))
+number_of_parameters<-length(thetaHat3_test)
+number_of_parameters
+for( i in 1:length(to_model3(X_test)[,1])){
+  X_test_i = matrix( to_model3(X_test)[i,] , 1 , number_of_parameters )
+  var_yHat[i,1] = sigma_2 * (X_test_i %*% cov_thetaHat %*% t(X_test_i) )
+}
+
+CI = 1.96 * sqrt(var_yHat) # Confidence interval   
+
+qqplot(X_test, yHat3_test , type = "l", xlab = "X test input signals", ylab = "Y test output signal with Confidence intervals")
+segments(X_test, yHat3_test-CI, X_test, yHat3_test+CI)
+
+mtext("Error bars", outer=TRUE, cex=1.5, line=-3.3)
+
+```
+
+### Task 3 
+
+#### 3.1 - The 2 parameters with largest absolute values in the least squares estimation
+```{r}
+thetaHat3[4]
+thetaHat3[1]
+```
+
+#### 3.2 Generating samples for the two parameters using uniform/prior distribution
+
+```{r}
+
+sample_theta1 <- runif(1e4,(thetaHat3[1]-(0.5*thetaHat3[1])), (thetaHat3[1]+(0.5*thetaHat3[1])))
+length(sample_theta1)
+
+sample_theta4 <- runif(1e4,(thetaHat3[4]-(0.5*thetaHat3[4])), (thetaHat3_test[4]+(0.5*thetaHat3_test[4])))
+sample_theta4[3]
+```
+
+#### 3.3 Performing Rejection ABC for these two parameters by taking the samples
+
+```{r}
+
+mse_main <- sum((y_m-yHat3)^2)/201
+
+# the MSE value for the select model is 0.285, therefore choosing the epsilon value within the range. if epsilon is 0.3, we have 5163 samples, if 0.2, then 0 samples
+
+sample_theta1_accept = list()
+sample_theta4_accept = list()
+
+for (i in 1:1e4) {
+  sample_thetahat <- matrix(c(sample_theta1[i], thetaHat3[2], thetaHat3[3], sample_theta4[i]), nrow=4, ncol=1)
+  sample_yHat <- X3 %*% sample_thetahat
+  sample_mse <- (1/length(X_m[,1]))*sum((y_m-sample_yHat)^2)
+  #print(sample_mse)
+  if (sample_mse <= 0.3) {
+    sample_theta1_accept <- append(sample_theta1_accept,sample_theta1[i])
+    sample_theta4_accept <- append(sample_theta4_accept,sample_theta4[i])
+  }
+}
+
+length(sample_theta1_accept)
+max(sapply(sample_theta1_accept, max))
+length(sample_theta4_accept) 
+max(sapply(sample_theta4_accept, max))
+
+```
+
+#### 3.4 Plot the joint and marginal posterior distribution for these 2 parameters
+
+```{r}
+
+library(tidyverse)
+library(magrittr)
+
+matrix_parameters <- cbind(as.matrix(as.numeric(sample_theta1_accept)), as.matrix(as.numeric(sample_theta4_accept)))
+
+df_parameters <- as.data.frame(matrix_parameters)
+
+#dev.off()
+### Joint plot
+ggplot(df_parameters, aes(x=df_parameters[,1], y=df_parameters[,2]) ) + stat_density_2d(aes(fill = ..level..), geom = "polygon", colour="white") + xlab("sample parameters of theta1") + ylab("sample parameters of theta4") + ggtitle("Joint posterior distribution")
+
+ggplot(df_parameters, aes(x=df_parameters[,1], y=df_parameters[,2]))+ theme_bw() + geom_density2d(color=' black', alpha=10) + geom_point(alpha=0.5, col='red') + ggtitle("Sample parameters") + xlab("Parameter 1") + ylab("Parameter 4")
+
+
+### Marginal plot
+par(mfrow=c(1,2))
+hist(as.numeric(sample_theta1_accept) , main="Parameter 1", xlab='Samples of Parameter 1')
+hist(as.numeric(sample_theta4_accept), main="Parameter 4", xlab ='Samples of Parameter 4')
+mtext("Marginal posterior distributions for two parameters", outer=TRUE, cex=1.5, line=-1.2)
+```
+
